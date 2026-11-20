@@ -1,0 +1,46 @@
+[project]
+name = "payment"
+version = "0.1.0"
+description = "Asynchronous payment processing service"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
+    "fastapi>=0.163.1",
+    "faststream[cli,rabbit]>=0.7.8,<0.8",
+    "httpx>=0.28.1",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.3",
+    "sqlalchemy[asyncio]>=2.0,<3",
+    "uvicorn>=0.54.0",
+]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
+
+[dependency-groups]
+dev = [
+    "asyncpg-stubs>=0.32.0",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+    "ruff>=0.17.5",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["e2e: real PostgreSQL, RabbitMQ and HTTP webhook"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+strict = true
+files = ["app", "migrations", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"

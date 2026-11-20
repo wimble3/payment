@@ -1,0 +1,93 @@
+name: payment
+x-service: &service
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  environment: &environment
+    DATABASE_URL: postgresql+asyncpg://payment:payment@postgres:5432/payment
+    RABBITMQ_URL: amqp://payment:payment@rabbitmq:5672/
+    API_KEY: ${API_KEY:-local-development-key}
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: payment
+      POSTGRES_PASSWORD: payment
+      POSTGRES_DB: payment
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment -d payment"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: payment
+      RABBITMQ_DEFAULT_PASS: payment
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
+    volumes: ["rabbitmq_data:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    <<: *service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *service
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  consumer:
+    <<: *service
+    command: ["faststream", "run", "app.transport.faststream.app:app"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  outbox:
+    <<: *service
+    command: ["python", "-m", "app.infra.outbox"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  tests:
+    <<: *service
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tests
+    environment:
+      <<: *environment
+      TEST_DATABASE_URL: postgresql+asyncpg://payment:payment@postgres:5432/payment_test
+      TEST_RABBITMQ_URL: amqp://payment:payment@rabbitmq:5672/payment_test
+    command: ["pytest", "-q"]
+    restart: "no"
+    profiles: ["test"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  rabbitmq_data:

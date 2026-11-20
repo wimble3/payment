@@ -1,0 +1,11 @@
+FROM python:3.13-slim
+RUN python -m pip install --no-cache-dir --disable-pip-version-check "uv==0.9.8"
+ENV UV_LINK_MODE=copy PYTHONUNBUFFERED=1 PATH="/service/.venv/bin:$PATH"
+WORKDIR /service
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen
+COPY app ./app
+COPY migrations ./migrations
+COPY alembic.ini ./
+COPY tests ./tests
+CMD ["pytest", "-q"]
